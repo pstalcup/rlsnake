@@ -1,0 +1,11 @@
+build/
+build-web/
+_deps/
+*.o
+*.a
+*.wasm
+*.data
+compile_commands.json
+.cache/
+.vscode/
+.idea/

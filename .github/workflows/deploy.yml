@@ -1,0 +1,77 @@
+name: Build & Deploy (web)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EM_VERSION: 3.1.64
+  BUILD_DIR: build-web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache emsdk
+        id: cache-emsdk
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/emsdk-cache
+          key: emsdk-${{ env.EM_VERSION }}-${{ runner.os }}
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EM_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Cache raylib sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/_deps
+          key: raylib-deps-${{ env.EM_VERSION }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure
+        run: emcmake cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build "$BUILD_DIR" --config Release -j"$(nproc)"
+
+      - name: Stage site
+        run: |
+          mkdir -p dist
+          cp "$BUILD_DIR"/index.html dist/
+          cp "$BUILD_DIR"/index.js dist/
+          cp "$BUILD_DIR"/index.wasm dist/
+          # Only present when assets/ is non-empty and gets preloaded.
+          if [ -f "$BUILD_DIR/index.data" ]; then cp "$BUILD_DIR/index.data" dist/; fi
+          touch dist/.nojekyll
+          ls -lh dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: dist
+
+      - name: Deploy to gh-pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
