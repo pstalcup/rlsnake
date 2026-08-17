@@ -1,5 +1,7 @@
 #include "raylib.h"
 
+#include "assets.h"
+
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
 #endif
@@ -11,6 +13,7 @@ static void UpdateDrawFrame(void);
 
 int main(void)
 {
+    InitAssets();
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "rlsnake");
 
 #if defined(PLATFORM_WEB)

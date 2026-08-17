@@ -7,11 +7,47 @@ with CI that publishes the web build to the `gh-pages` branch.
 
 ```
 src/main.c          entry point (stub — no game logic yet)
+src/assets.c/.h     asset path anchoring + JSON loading
 src/shell.html      emscripten HTML shell used for the web build
-assets/             bundled into the web build via --preload-file
-CMakeLists.txt      fetches raylib 5.5 and builds both targets
+assets/images/      textures (PNG)
+assets/data/        JSON data files
+CMakeLists.txt      fetches raylib 5.5 + cJSON, builds both targets
 .github/workflows/deploy.yml
 ```
+
+## Assets
+
+Drop files into `assets/` and they are packaged automatically — no CMake edits
+needed (the glob uses `CONFIGURE_DEPENDS`, so adding a file is picked up on the
+next build).
+
+| | web | desktop |
+|---|---|---|
+| how | baked into `index.data`, mounted at `/assets` | copied next to the binary |
+| by | emscripten `--preload-file` | CMake post-build step |
+
+`InitAssets()` (called first in `main`) anchors the working directory to the
+executable's location on desktop, so **the same relative path works on both
+platforms**:
+
+```c
+Texture2D snake = LoadTexture("assets/images/snake.png");
+
+cJSON *levels = LoadJsonAsset("assets/data/levels.json");
+if (levels != NULL) { /* ... */ UnloadJsonAsset(levels); }
+```
+
+Notes:
+
+- **Image formats**: raylib is built with PNG, BMP, TGA, GIF and QOI support.
+  JPEG is off in raylib's default config — prefer PNG.
+- **Editing an asset triggers a relink** on web (`LINK_DEPENDS`), so `index.data`
+  can't go stale.
+- **An empty `assets/` produces no `index.data`** at all, and the workflow's copy
+  step skips it. `.gitkeep` files are filtered out of the glob, so they never get
+  packaged.
+- Assets are fetched over HTTP on web, so the page must be served (not opened as
+  a `file://` URL).
 
 ## Desktop build
 
